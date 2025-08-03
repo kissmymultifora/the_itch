@@ -1,0 +1,6 @@
+1|A|apple pie recipe
+6|F|fresh bread
+2|B|brown sugar cookies
+7|G|green salad
+8|H|hot soup
+9|I|ice cream
