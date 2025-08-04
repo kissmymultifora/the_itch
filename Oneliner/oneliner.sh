@@ -416,14 +416,17 @@ compare_files_bash() {
     local first_file="$1"
     local second_file="$2"
     
-    # Declare associative array for lookup
-    declare -A seen_keys
-    
-    # Build lookup table from first file
-    build_lookup_table "$first_file" seen_keys
-    
-    # Process second file and output unique lines
-    process_second_file "$second_file" seen_keys
+    # Check if associative arrays are supported
+    if declare -A test_array 2>/dev/null; then
+        # Use associative arrays for efficient lookup
+        declare -A seen_keys
+        build_lookup_table "$first_file" seen_keys
+        process_second_file "$second_file" seen_keys
+    else
+        # Fallback: use AWK implementation when associative arrays not supported
+        log_warn "Associative arrays not supported, falling back to AWK implementation"
+        compare_files_awk "$first_file" "$second_file"
+    fi
 }
 
 # Alternative implementation using AWK (more efficient for large files)
@@ -483,9 +486,34 @@ compare_files_awk() {
         ' "$first_file" "$second_file"
     else
         # For JSON/CSV output, process line by line to use formatting functions
-        local -A seen_keys
-        build_lookup_table "$first_file" seen_keys
-        process_second_file "$second_file" seen_keys
+        # Check if associative arrays are supported
+        if declare -A test_array 2>/dev/null; then
+            declare -A seen_keys
+            build_lookup_table "$first_file" seen_keys
+            process_second_file "$second_file" seen_keys
+        else
+            # Fallback: use AWK even for JSON/CSV (less pretty but functional)
+            log_warn "Associative arrays not supported, using AWK fallback for JSON/CSV output"
+            awk -F"$FIELD_SEPARATOR" -v sep="$FIELD_SEPARATOR" '
+                NR == FNR {
+                    if (index($0, sep) > 0) {
+                        $1 = ""; $2 = ""; seen[$0]++
+                    } else {
+                        seen[$0]++
+                    }
+                    next
+                }
+                {
+                    orig = $0
+                    if (index($0, sep) > 0) {
+                        $1 = ""; $2 = ""; key = $0
+                    } else {
+                        key = $0
+                    }
+                    if (!seen[key]) print orig
+                }
+            ' "$first_file" "$second_file"
+        fi
     fi
 }
 
